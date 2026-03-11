@@ -1,0 +1,58 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+.DS_Store
+dist
+dist-ssr
+coverage
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.tsbuildinfo
+
+.eslintcache
+
+# Cypress
+/cypress/videos/
+/cypress/screenshots/
+
+# Vitest
+__screenshots__/
+
+# Vite
+*.timestamp-*-*.mjs
+
+#  -- Python --
+# Python-generated files
+scripts/auto-update/__pycache__/
+scripts/auto-update/*.py[oc]
+scripts/auto-update/build/
+scripts/auto-update/dist/
+scripts/auto-update/wheels/
+scripts/auto-update/*.egg-info
+
+# Virtual environments
+scripts/auto-update/.venv
+
+# Secrets
+scripts/auto-update/api-key.txt
+
+# Downloaded raw data
+scripts/auto-update/data/
+.tmp

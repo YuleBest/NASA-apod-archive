@@ -1,0 +1,16 @@
+{
+  "ui": {
+    "title": "每日天文一圖",
+    "subtitle": "探索宇宙中最令人驚嘆的影像精選存檔",
+    "today": "今天",
+    "go": "跳轉",
+    "lets_go": "出發！",
+    "video": "影片",
+    "loading": "載入中…",
+    "back": "返回",
+    "hd_image": "查看原圖",
+    "apod_page": "APOD 官網",
+    "newer": "較新",
+    "older": "較舊"
+  }
+}
