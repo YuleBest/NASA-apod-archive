@@ -2,7 +2,13 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'
-import { fetchAvailableMonths, fetchMonth, isVideo, type ApodEntry } from '@/composables/useApod'
+import {
+  fetchAvailableMonths,
+  fetchMonth,
+  fetchAllAvailableDates,
+  isVideo,
+  type ApodEntry,
+} from '@/composables/useApod'
 
 useHead({
   title: 'NASA APOD Archive | Discover the Cosmos',
@@ -75,13 +81,9 @@ const error = ref('')
 
 onMounted(async () => {
   try {
-    const res = await fetch('/database/update.json')
-    if (res.ok) {
-      const data: { dates: string[] } = await res.json()
-      allAvailableDates.value = data.dates
-    }
+    allAvailableDates.value = await fetchAllAvailableDates()
   } catch (err) {
-    console.warn('Failed to fetch update.json', err)
+    console.warn('Failed to fetch available dates', err)
   }
 
   try {

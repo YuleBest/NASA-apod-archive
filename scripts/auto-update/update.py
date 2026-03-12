@@ -204,6 +204,13 @@ def download_day(date_str: str, stats: Stats, update_file: str = UPDATE_FILE) ->
 
 
 # ── 入口 ──────────────────────────────────────────────────────
+def get_et_today() -> str:
+    """获取 NASA APOD 所在的美国东部时间日期 (ET)"""
+    from datetime import timezone, timedelta
+    # NASA APOD typically updates at midnight ET. 
+    # Use UTC-5 (EST) as a safe baseline.
+    return (datetime.now(timezone.utc) - timedelta(hours=5)).strftime("%Y-%m-%d")
+
 def update(
     no_tui: bool = False,
     start_date: str | None = None,
@@ -217,28 +224,37 @@ def update(
     MAX_WORKERS = workers
     os.makedirs(SAVE_DIR, exist_ok=True)
 
-    # 构建日期列表
-    # 优先级：CLI 参数 > config.yaml > tracker(start) / 今天(end)
-    today = date.today().isoformat()
+    _print = print if no_tui else console.print
+    
+    # 优先级：CLI 参数 > config.yaml
     if start_date is None:
-        start_date = _cfg.get("start_date")          # config.yaml 设定值
-    if start_date is None:
-        start_date = _tracker.get_next_start(update_file, APOD_START)  # tracker 记录的下一天
-    if end_date is None:
-        end_date = _cfg.get("end_date") or today     # config.yaml 设定值，否则今天
-
-    # 从 tracker 中过滤掉已处理的日期
+        start_date = _cfg.get("start_date")
+    
+    # 构建已处理日期集合 (从 update.json 加载)
     done_dates = _tracker.load(update_file)
+    
+    # 核心逻辑：即使 config 指定了起始日期，我们依然要看是否有自动检测的必要
+    # 如果用户没有通过 CLI 显式传递 --start，且 config 是默认的 APOD_START
+    # 则自动检测增量起点，以防重复扫描 9000 多天。
+    auto_start = _tracker.get_next_start(update_file, APOD_START)
+    if start_date == "1995-06-16" and auto_start > APOD_START:
+        start_date = auto_start
 
-    if start_date > end_date:
-        dates = []
-    else:
-        dates = []
+    today = get_et_today()
+    if end_date is None:
+        # 优先级：config.yaml > 今天的 ET 日期
+        cfg_end = _cfg.get("end_date")
+        # _cfg.get("end_date") 已经在 config.py 中通过 _resolve_date 处理过了
+        end_date = cfg_end if cfg_end else today
+
+    dates = []
+    if start_date <= end_date:
         curr = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
         while curr <= end_dt:
             d = curr.strftime("%Y-%m-%d")
-            if d not in done_dates:  # 跳过 tracker 已记录的日期
+            # 只有不在 done_dates 中的才需要下载
+            if d not in done_dates:
                 dates.append(d)
             curr += timedelta(days=1)
 

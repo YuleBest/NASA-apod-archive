@@ -22,27 +22,64 @@ _lock = Lock()
 
 
 def load(path: str) -> set[str]:
-    """读取 update.json，返回已处理日期的集合。文件不存在时返回空集合。"""
+    """读取 update.json，返回已处理日期的集合。"""
     if not os.path.exists(path):
         return set()
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return set(data.get("dates", []))
+        
+        dates = set(data.get("dates", []))
+        # 兼容新的 ranges 格式
+        ranges = data.get("ranges", [])
+        for r in ranges:
+            if len(r) == 2:
+                start_dt = datetime.strptime(r[0], "%Y-%m-%d")
+                end_dt = datetime.strptime(r[1], "%Y-%m-%d")
+                curr = start_dt
+                while curr <= end_dt:
+                    dates.add(curr.strftime("%Y-%m-%d"))
+                    curr += timedelta(days=1)
+        return dates
     except Exception:
         return set()
 
 
-def _write(path: str, dates: set[str]) -> None:
-    """将日期集合写回 update.json（已持有锁时调用）。"""
+def _write(path: str, dates_set: set[str]) -> None:
+    """将日期合并为区间并写回 update.json（不再写入全量 dates 数组）。"""
+    existing = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except:
+            pass
+
+    dates = sorted(dates_set)
+    ranges = []
+    if dates:
+        start = dates[0]
+        prev = dates[0]
+        for i in range(1, len(dates)):
+            curr = dates[i]
+            prev_dt = datetime.strptime(prev, "%Y-%m-%d")
+            curr_dt = datetime.strptime(curr, "%Y-%m-%d")
+            if curr_dt - prev_dt > timedelta(days=1):
+                ranges.append([start, prev])
+                start = curr
+            prev = curr
+        ranges.append([start, prev])
+
     payload = {
         "updated_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-        "dates": sorted(dates),
+        "ranges": ranges,
+        "files": existing.get("files", {})  # 保持现有的文件映射
     }
+    
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)  # 原子替换，避免写到一半时进程崩溃
+    os.replace(tmp, path)
 
 
 def mark_done(path: str, date_str: str) -> None:
@@ -56,10 +93,7 @@ def mark_done(path: str, date_str: str) -> None:
 
 
 def get_next_start(path: str, fallback: str) -> str:
-    """
-    返回已记录的最大日期 + 1 天（即增量起点）。
-    若 update.json 不存在或为空，返回 fallback。
-    """
+    """返回增量起点。"""
     dates = load(path)
     if not dates:
         return fallback

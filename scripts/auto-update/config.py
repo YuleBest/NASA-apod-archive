@@ -17,8 +17,8 @@ _DEFAULTS: dict = {
     "apod_start":       "1995-06-16",
     "api_rate_limit":   1000,
     "max_retry_rounds": 3,
-    "start_date":       "2024-01-01",
-    "end_date":         "2026-03-10",
+    "start_date":       "1995-06-16",
+    "end_date":         -1,
 }
 
 _CONFIG_FILE = "config.yaml"

@@ -121,9 +121,14 @@ def main(
                 )
 
     # ── 3. 整理输出 ───────────────────────────────────────────
-    step("Step 3 / 3  整理数据 organize.py", no_tui)
+    step("Step 3 / 4  整理数据 organize.py", no_tui)
     from organize import organize
     organize(no_tui=no_tui, data_dir=data_dir, dist_dir=dist_dir)
+
+    # ── 4. 重建索引 ───────────────────────────────────────────
+    step("Step 4 / 4  重建搜索索引 rebuild_index.py", no_tui)
+    from rebuild_index import rebuild_index
+    rebuild_index(dist_dir=dist_dir)
 
     if no_tui:
         print("\n流水线全部完成！")
