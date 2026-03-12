@@ -40,6 +40,27 @@ declare module 'vue-router/auto-routes' {
       { date: ParamValue<false> },
       | never
     >,
+    '/image/[date]': RouteRecordInfo<
+      '/image/[date]',
+      '/image/:date',
+      { date: ParamValue<true> },
+      { date: ParamValue<false> },
+      | never
+    >,
+    '/image/latest': RouteRecordInfo<
+      '/image/latest',
+      '/image/latest',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/latest': RouteRecordInfo<
+      '/latest',
+      '/latest',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
   }
 
   /**
@@ -62,6 +83,24 @@ declare module 'vue-router/auto-routes' {
     'src/pages/[date].vue': {
       routes:
         | '/[date]'
+      views:
+        | never
+    }
+    'src/pages/image/[date].vue': {
+      routes:
+        | '/image/[date]'
+      views:
+        | never
+    }
+    'src/pages/image/latest.vue': {
+      routes:
+        | '/image/latest'
+      views:
+        | never
+    }
+    'src/pages/latest.vue': {
+      routes:
+        | '/latest'
       views:
         | never
     }

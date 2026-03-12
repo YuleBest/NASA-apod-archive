@@ -150,9 +150,7 @@ const showGoDialog = ref(false)
 const goDateInput = ref('')
 
 function goToLatest() {
-  if (latestDateBtn.value.date) {
-    router.push(`/${latestDateBtn.value.date}`)
-  }
+  router.push('/latest')
 }
 
 function handleGo() {
