@@ -111,12 +111,44 @@ def organize(
 
     # 写出每月文件
     written = 0
+    search_data = [] # 收集全文搜索数据
     for month_key in sorted(monthly.keys()):
         entries = sorted(monthly[month_key], key=lambda d: d.get("date", ""))
         out_path = os.path.join(dist_dir, f"{month_key}.json")
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(entries, f, ensure_ascii=False, indent=2)
         written += 1
+        
+        # 收集有效数据用于搜索
+        for entry in entries:
+            if not entry.get("no_data") and entry.get("title"):
+                search_data.append({
+                    "d": entry.get("date"),
+                    "t": entry.get("title"),
+                    "e": entry.get("explanation", "")
+                })
+
+    # 写出搜索索引文件
+    search_path = os.path.join(dist_dir, "search.json")
+    with open(search_path, "w", encoding="utf-8") as f:
+        # 使用紧凑格式减少体积
+        json.dump(search_data, f, ensure_ascii=False, separators=(",", ":"))
+
+    if no_tui:
+        print(f"整理完成  月份文件：{written} 个  搜索索引：{len(search_data)} 条  跳过失败：{skipped} 条  → {dist_dir}/")
+    else:
+        console.print(
+            Panel(
+                f"[green]✅ 整理完成[/]\n"
+                f"  月份文件：[bold]{written}[/] 个\n"
+                f"  搜索索引：[bold]{len(search_data)}[/] 条\n"
+                f"  跳过失败：[yellow]{skipped}[/] 条\n"
+                f"  输出目录：[dim]{dist_dir}/[/]",
+                title="organize",
+                border_style="green",
+                box=box.ROUNDED,
+            )
+        )
 
     if no_tui:
         print(f"整理完成  月份文件：{written} 个  跳过失败：{skipped} 条  → {dist_dir}/")

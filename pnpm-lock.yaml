@@ -11,6 +11,9 @@ importers:
       '@unhead/vue':
         specifier: ^2.1.12
         version: 2.1.12(vue@3.5.30(typescript@5.9.3))
+      flexsearch:
+        specifier: ^0.8.212
+        version: 0.8.212
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3))
@@ -1165,6 +1168,9 @@ packages:
 
   flatted@3.4.1:
     resolution: {integrity: sha512-IxfVbRFVlV8V/yRaGzk0UVIcsKKHMSfYw66T/u4nTwlWteQePsxe//LjudR1AMX4tZW3WFCh3Zqa/sjlqpbURQ==}
+
+  flexsearch@0.8.212:
+    resolution: {integrity: sha512-wSyJr1GUWoOOIISRu+X2IXiOcVfg9qqBRyCPRUdLMIGJqPzMo+jMRlvE83t14v1j0dRMEaBbER/adQjp6Du2pw==}
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -2770,6 +2776,8 @@ snapshots:
       keyv: 4.5.4
 
   flatted@3.4.1: {}
+
+  flexsearch@0.8.212: {}
 
   fsevents@2.3.3:
     optional: true

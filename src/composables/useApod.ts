@@ -11,13 +11,18 @@ export interface ApodEntry {
 
 const cache = new Map<string, ApodEntry[]>()
 
+export function isValidEntry(e: ApodEntry): boolean {
+  return !e.no_data && e.http_status !== 429 && !!e.url && !!e.title
+}
+
 export async function fetchMonth(yearMonth: string): Promise<ApodEntry[]> {
   if (cache.has(yearMonth)) return cache.get(yearMonth)!
   const res = await fetch(`/database/${yearMonth}.json`)
   if (!res.ok) throw new Error(`Failed to load ${yearMonth}`)
   const data: ApodEntry[] = await res.json()
-  cache.set(yearMonth, data)
-  return data
+  const filtered = data.filter(isValidEntry)
+  cache.set(yearMonth, filtered)
+  return filtered
 }
 
 export async function fetchEntry(date: string): Promise<ApodEntry | null> {

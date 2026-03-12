@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'
+import { Document } from 'flexsearch'
 import { fetchAvailableMonths, fetchMonth, isVideo, type ApodEntry } from '@/composables/useApod'
 
 useHead({
@@ -24,13 +25,49 @@ const router = useRouter()
 
 const allMonths = ref<string[]>([])
 const allAvailableDates = ref<string[]>([])
-const years = computed(() => [...new Set(allMonths.value.map((m) => m.slice(0, 4)))])
+const validYears = ref<string[]>([])
+const years = computed(() => validYears.value)
 
 const selectedYear = ref('')
 const selectedMonthPart = ref('')
 
+const validMonthsInYear = ref<string[]>([])
+const selectingYear = ref(false)
+
 const availableMonthsForYear = computed(() => {
-  return allMonths.value.filter((m) => m.startsWith(selectedYear.value)).map((m) => m.slice(5, 7))
+  return validMonthsInYear.value.map((m) => m.slice(5, 7))
+})
+
+async function checkValidMonths(year: string) {
+  if (!year) {
+    validMonthsInYear.value = []
+    return
+  }
+  selectingYear.value = true
+  try {
+    const monthsToTest = allMonths.value.filter((m) => m.startsWith(year))
+    const results = await Promise.all(
+      monthsToTest.map(async (m) => {
+        try {
+          const entries = await fetchMonth(m)
+          return entries.length > 0
+        } catch {
+          return false
+        }
+      }),
+    )
+    validMonthsInYear.value = monthsToTest.filter((_, i) => results[i])
+  } finally {
+    selectingYear.value = false
+  }
+}
+
+watch(selectedYear, async (newYear: string) => {
+  await checkValidMonths(newYear)
+  // If current selected month is not in the valid list, reset it
+  if (!validMonthsInYear.value.some((m) => m.endsWith(`-${selectedMonthPart.value}`))) {
+    selectedMonthPart.value = availableMonthsForYear.value[0] ?? ''
+  }
 })
 
 const entries = ref<ApodEntry[]>([])
@@ -38,20 +75,54 @@ const loading = ref(false)
 const error = ref('')
 
 onMounted(async () => {
-  // 1. Fetch update.json, extract all available dates to determine latest date
   try {
     const res = await fetch('/database/update.json')
     if (res.ok) {
       const data: { dates: string[] } = await res.json()
       allAvailableDates.value = data.dates
     }
-  } catch {}
+  } catch (err) {
+    console.warn('Failed to fetch update.json', err)
+  }
 
-  allMonths.value = await fetchAvailableMonths()
-  if (allMonths.value.length) {
-    selectedYear.value = years.value[0] ?? ''
-    selectedMonthPart.value = availableMonthsForYear.value[0] ?? ''
-    await loadMonth()
+  try {
+    allMonths.value = await fetchAvailableMonths()
+    if (allMonths.value.length) {
+      const rawYears = [...new Set(allMonths.value.map((m) => m.slice(0, 4)))]
+
+      const yearResults = await Promise.all(
+        rawYears.map(async (y) => {
+          const monthsInYear = allMonths.value.filter((m) => m.startsWith(y))
+          const results = await Promise.all(
+            monthsInYear.map(async (m) => {
+              try {
+                const entries = await fetchMonth(m)
+                return entries.length > 0
+              } catch {
+                return false
+              }
+            }),
+          )
+          return results.some((r) => r)
+        }),
+      )
+
+      validYears.value = rawYears.filter((_, i) => yearResults[i])
+
+      if (validYears.value.length) {
+        selectedYear.value = validYears.value[0] ?? ''
+        await checkValidMonths(selectedYear.value)
+        selectedMonthPart.value = availableMonthsForYear.value[0] ?? ''
+        await loadMonth()
+      }
+
+      // Background pre-load search index after 2 seconds
+      setTimeout(() => {
+        loadSearchIndex()
+      }, 2000)
+    }
+  } catch (e: unknown) {
+    console.error('Error during initial data fetch:', e)
   }
 })
 
@@ -136,6 +207,117 @@ function getFirstSentence(text?: string | null) {
   const match = text.match(/^.*?\.(?=\s|$)/)
   return match ? match[0] : text.slice(0, 120) + '...'
 }
+
+// ── Search Logic ───────────────────────────────────────────
+interface SearchDoc {
+  d: string // date
+  t: string // title
+  e: string // explanation
+}
+
+const searchQuery = ref('')
+const searchResults = ref<SearchDoc[]>([])
+const isSearching = ref(false)
+const searchLoading = ref(false)
+const indexReady = ref(false)
+let searchIndex: any = null // eslint-disable-line @typescript-eslint/no-explicit-any
+
+interface SearchResultField {
+  field: string
+  result: Array<{ id: string; doc: SearchDoc }>
+}
+
+async function loadSearchIndex() {
+  if (indexReady.value || searchLoading.value) return
+  searchLoading.value = true
+  try {
+    const res = await fetch('/database/search.json')
+    if (!res.ok) throw new Error('Failed to load search index')
+    const data: SearchDoc[] = await res.json()
+
+    searchIndex = new Document({
+      document: {
+        id: 'd',
+        index: [
+          { field: 't', tokenize: 'forward', resolution: 9 },
+          { field: 'e', tokenize: 'forward', resolution: 9 },
+        ],
+        store: ['d', 't', 'e'],
+      },
+      // Custom encoder to avoid library issues
+      encode: (str: string) =>
+        str
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, ' ')
+          .split(/\s+/),
+      suggest: true,
+      cache: true,
+    })
+
+    // Non-blocking chunked adding
+    const CHUNK_SIZE = 100
+    let offset = 0
+
+    const processNextChunk = () => {
+      const end = Math.min(offset + CHUNK_SIZE, data.length)
+      for (let i = offset; i < end; i++) {
+        searchIndex.add(data[i])
+      }
+      offset = end
+
+      if (offset < data.length) {
+        // Schedule next chunk to keep main thread responsive
+        if ('requestIdleCallback' in window) {
+          ;(window as any).requestIdleCallback(processNextChunk)
+        } else {
+          setTimeout(processNextChunk, 1)
+        }
+      } else {
+        indexReady.value = true
+        searchLoading.value = false
+        console.log('Search index loaded successfully')
+      }
+    }
+
+    processNextChunk()
+  } catch (err) {
+    console.error('Search init error:', err)
+    searchLoading.value = false
+  }
+}
+
+watch(searchQuery, (q) => {
+  if (!q.trim()) {
+    searchResults.value = []
+    isSearching.value = false
+    return
+  }
+  isSearching.value = q.length > 1
+  if (q.length > 2 && indexReady.value && searchIndex) {
+    const res = searchIndex.search(q, { limit: 20, enrich: true }) as SearchResultField[]
+    if (res.length > 0) {
+      const allResults: SearchDoc[] = []
+      res.forEach((fieldResult) => {
+        if (fieldResult.result) {
+          fieldResult.result.forEach((item) => {
+            allResults.push(item.doc)
+          })
+        }
+      })
+      // Unique results by date
+      const unique = Array.from(new Map(allResults.map((it) => [it.d, it])).values())
+      searchResults.value = unique
+    } else {
+      searchResults.value = []
+    }
+  }
+})
+
+function clearSearch() {
+  searchQuery.value = ''
+  searchResults.value = []
+  isSearching.value = false
+}
 </script>
 
 <template>
@@ -157,13 +339,24 @@ function getFirstSentence(text?: string | null) {
           <select v-model="selectedMonthPart" class="month-select" @change="loadMonth()">
             <option v-for="m in availableMonthsForYear" :key="m" :value="m">{{ m }}</option>
           </select>
+
+          <div class="search-wrapper">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search APOD..."
+              class="search-input"
+              @focus="loadSearchIndex"
+            />
+            <button v-if="searchQuery" class="search-clear" @click="clearSearch()">×</button>
+            <div v-if="searchLoading" class="search-indicator">
+              <div class="search-spinner-sm"></div>
+              <span>Preparing...</span>
+            </div>
+          </div>
         </div>
 
         <div class="controls-right">
-          <button v-if="latestDateBtn.date" class="today-btn" @click="goToLatest()">
-            {{ latestDateBtn.label }}
-          </button>
-
           <div class="go-wrapper">
             <button class="today-btn go-btn" @click="showGoDialog = !showGoDialog">GO</button>
             <div v-if="showGoDialog" class="go-dialog">
@@ -171,13 +364,36 @@ function getFirstSentence(text?: string | null) {
               <button class="today-btn" @click="handleGo()">Let's GO!</button>
             </div>
           </div>
+          <button v-if="latestDateBtn.date" class="today-btn" @click="goToLatest()">
+            {{ latestDateBtn.label }}
+          </button>
         </div>
       </div>
 
-      <!-- Loading / Error -->
-      <div v-if="loading" class="state-msg">
+      <!-- Search Results Overlay -->
+      <div v-if="isSearching" class="search-results">
+        <div v-if="searchResults.length === 0" class="search-empty">
+          No results for "{{ searchQuery }}"
+        </div>
+        <div v-else class="search-list">
+          <div
+            v-for="res in searchResults"
+            :key="res.d"
+            class="search-item"
+            @click="goToDate(res.d)"
+          >
+            <span class="search-item-date">{{ res.d }}</span>
+            <div class="search-item-body">
+              <div class="search-item-title">{{ res.t }}</div>
+              <div class="search-item-snippet">{{ getFirstSentence(res.e) }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="loading || selectingYear" class="state-msg">
         <div class="spinner"></div>
-        <span>Loading…</span>
+        <span>{{ selectingYear ? 'Checking available months...' : 'Loading...' }}</span>
       </div>
       <div v-else-if="error" class="state-msg error">{{ error }}</div>
 
@@ -309,6 +525,126 @@ function getFirstSentence(text?: string | null) {
   background: var(--card-bg);
   color: var(--text);
   padding: 8px;
+}
+.month-select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+}
+.month-select:hover {
+  border-color: #63b3ff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Search ─────────────────────────────────────────────── */
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 16px;
+  padding-right: 32px;
+  border-radius: 12px;
+  font-size: 14px;
+  width: 200px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.search-input:focus {
+  width: 300px;
+  border-color: #63b3ff;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 4px rgba(99, 179, 255, 0.15);
+}
+.search-clear {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.search-indicator {
+  position: absolute;
+  right: -90px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.search-spinner-sm {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #63b3ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.search-results {
+  margin-top: 10px;
+  background: rgba(13, 20, 31, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  z-index: 1000;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+.search-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.search-item {
+  display: flex;
+  gap: 20px;
+  padding: 16px 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.search-item:last-child {
+  border-bottom: none;
+}
+.search-item:hover {
+  background: rgba(99, 179, 255, 0.1);
+}
+.search-item-date {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-family: monospace;
+  white-space: nowrap;
+}
+.search-item-title {
+  font-weight: 600;
+  color: #63b3ff;
+  margin-bottom: 4px;
+}
+.search-item-snippet {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .today-btn {
   background: rgba(255, 255, 255, 0.04);

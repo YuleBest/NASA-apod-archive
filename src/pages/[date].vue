@@ -12,6 +12,7 @@ const entry = ref<ApodEntry | null>(null)
 const loading = ref(true)
 const error = ref('')
 const imgLoaded = ref(false)
+const downloading = ref(false)
 
 useHead({
   title: computed(() => (entry.value ? `${entry.value.title} | NASA APOD` : 'NASA APOD Details')),
@@ -38,10 +39,19 @@ const allAvailableDates = ref<string[]>([])
 async function loadData() {
   loading.value = true
   imgLoaded.value = false
+  error.value = ''
   try {
     const data = await fetchEntry(date.value)
     if (!data) {
-      error.value = 'Entry not found'
+      // If direct access to invalid date, try to find the nearest valid one or go home
+      console.warn(`Date ${date.value} is invalid/429. Redirecting...`)
+      const idx = allAvailableDates.value.indexOf(date.value)
+      if (idx !== -1) {
+        // Try to find ANY valid date nearby? Or just go home to avoid loops
+        router.replace('/')
+      } else {
+        error.value = 'Entry not found'
+      }
     } else {
       entry.value = data
     }
@@ -67,13 +77,33 @@ watch(date, () => {
   loadData()
 })
 
+async function findNextValid(startIndex: number, dir: -1 | 1): Promise<string | null> {
+  let currIdx = startIndex + dir
+  while (currIdx >= 0 && currIdx < allAvailableDates.value.length) {
+    const targetDate = allAvailableDates.value[currIdx]
+    if (targetDate) {
+      const data = await fetchEntry(targetDate)
+      if (data) return targetDate
+    }
+    currIdx += dir
+  }
+  return null
+}
+
 // adjacent dates
-function navigate(dir: -1 | 1) {
+async function navigate(dir: -1 | 1) {
   if (!allAvailableDates.value.length) return
   const idx = allAvailableDates.value.indexOf(date.value)
   if (idx === -1) return
-  const nextTarget = allAvailableDates.value[idx + dir]
-  if (nextTarget) router.push(`/${nextTarget}`)
+
+  loading.value = true // Show loading while seeking
+  const nextTarget = await findNextValid(idx, dir)
+  if (nextTarget) {
+    router.push(`/${nextTarget}`)
+  } else {
+    loading.value = false
+    // maybe toast: no more dates
+  }
 }
 
 function formatDate(d: string) {
@@ -87,6 +117,36 @@ function formatDate(d: string) {
 
 const displayUrl = computed(() => entry.value?.hdurl || entry.value?.url || null)
 const isVid = computed(() => isVideo(entry.value?.url ?? null))
+
+async function downloadImage() {
+  const url = entry.value?.hdurl || entry.value?.url
+  if (!url || isVid.value || downloading.value) return
+
+  downloading.value = true
+  try {
+    const proxyUrl = `/proxy?url=${encodeURIComponent(url)}`
+    const response = await fetch(proxyUrl)
+    if (!response.ok) throw new Error('Proxy request failed')
+
+    const blob = await response.blob()
+    const blobUrl = URL.createObjectURL(blob)
+
+    const link = document.createElement('a')
+    link.href = blobUrl
+    // Extract filename from URL or use a default
+    const filename = url.split('/').pop() || `apod-${date.value}.jpg`
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(blobUrl)
+  } catch (e) {
+    console.error('Download failed:', e)
+    alert('Download failed. You can try right-clicking the image to save it.')
+  } finally {
+    downloading.value = false
+  }
+}
 </script>
 
 <template>
@@ -145,15 +205,32 @@ const isVid = computed(() => isVideo(entry.value?.url ?? null))
           <!-- Actions -->
 
           <div class="actions">
-            <a
-              v-if="entry.hdurl && !isVid"
-              :href="entry.hdurl"
-              target="_blank"
-              rel="noopener"
+            <button
+              v-if="(entry.hdurl || entry.url) && !isVid"
               class="btn btn-primary"
+              :disabled="downloading"
+              @click="downloadImage"
             >
-              🖼 HD Image
-            </a>
+              <svg
+                v-if="!downloading"
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="btn-icon"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <div v-else class="btn-spinner"></div>
+              {{ downloading ? 'Downloading...' : 'HD Image' }}
+            </button>
             <a
               :href="`https://apod.nasa.gov/apod/ap${entry.date.replace(/-/g, '').slice(2)}.html`"
               target="_blank"
@@ -409,20 +486,39 @@ const isVid = computed(() => isVideo(entry.value?.url ?? null))
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 22px;
+  gap: 8px;
+  padding: 10px 20px;
   border-radius: 10px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   transition: all 0.2s;
+  cursor: pointer;
 }
 .btn-primary {
   background: #63b3ff;
   color: #060c17;
+  border: none;
 }
-.btn-primary:hover {
-  background: #90caff;
+.btn-primary:hover:not(:disabled) {
+  background: #7ec7ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 179, 255, 0.3);
+}
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+.btn-icon {
+  flex-shrink: 0;
+}
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 .btn-ghost {
   background: rgba(255, 255, 255, 0.06);
