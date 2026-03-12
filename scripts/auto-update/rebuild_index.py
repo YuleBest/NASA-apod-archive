@@ -6,7 +6,7 @@ from config import load as _load_config
 
 def rebuild_index(dist_dir: str | None = None):
     _cfg = _load_config()
-    public_db_dir = dist_dir or _cfg["dist_dir"]
+    public_db_dir = os.path.abspath(dist_dir or _cfg["dist_dir"])
     search_path = os.path.join(public_db_dir, 'search.json')
     update_path = os.path.join(public_db_dir, 'update.json')
     
@@ -33,7 +33,14 @@ def rebuild_index(dist_dir: str | None = None):
                 
                 for entry in entries:
                     d = entry.get("date")
-                    if d:
+                    if not d: continue
+                    
+                    status = entry.get("http_status")
+                    is_invalid = entry.get("no_data") and status in (400, 429)
+
+                    # 只有真正有效的日期或者确认为 404/Null 的日期才放入索引
+                    # 400/429 是临时性故障，不应该出现在前端日期列表中
+                    if not is_invalid:
                         all_dates.add(d)
                         
                     if not entry.get('no_data') and entry.get('title'):

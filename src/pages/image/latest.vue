@@ -1,27 +1,22 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchMonth } from '@/composables/useApod'
+import { fetchAllAvailableDates, fetchEntry } from '@/composables/useApod'
 
 const router = useRouter()
 
 onMounted(async () => {
   try {
-    const res = await fetch('/database/update.json')
-    if (res.ok) {
-      const data = await res.json()
-      if (data.dates && data.dates.length > 0) {
-        const latest = data.dates[data.dates.length - 1]
-        const ym = latest.slice(0, 7)
-        const entries = await fetchMonth(ym)
-        const entry = entries.find((e) => e.date === latest)
+    const dates = await fetchAllAvailableDates()
+    if (dates.length > 0) {
+      const latest = dates[dates.length - 1]!
+      const entry = await fetchEntry(latest)
 
-        if (entry) {
-          const url = entry.hdurl || entry.url
-          if (url) {
-            window.location.replace(url)
-            return
-          }
+      if (entry) {
+        const url = entry.hdurl || entry.url
+        if (url) {
+          window.location.replace(url)
+          return
         }
       }
     }

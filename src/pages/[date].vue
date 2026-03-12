@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'
-import { fetchEntry, isVideo, type ApodEntry } from '@/composables/useApod'
+import { fetchEntry, isVideo, fetchAllAvailableDates, type ApodEntry } from '@/composables/useApod'
 
 const route = useRoute('/[date]')
 const router = useRouter()
@@ -47,12 +47,15 @@ async function loadData() {
     if (!data) {
       // If direct access to invalid date, try to find the nearest valid one or go home
       console.warn(`Date ${date.value} is invalid/429. Redirecting...`)
-      const idx = allAvailableDates.value.indexOf(date.value)
-      if (idx !== -1) {
-        // Try to find ANY valid date nearby? Or just go home to avoid loops
-        router.replace('/')
+      if (allAvailableDates.value.length > 0) {
+        const idx = allAvailableDates.value.indexOf(date.value)
+        if (idx !== -1) {
+          router.replace('/')
+        } else {
+          error.value = 'Entry not found'
+        }
       } else {
-        error.value = 'Entry not found'
+        error.value = 'Data index not loaded'
       }
     } else {
       entry.value = data
@@ -66,12 +69,10 @@ async function loadData() {
 
 onMounted(async () => {
   try {
-    const res = await fetch('/database/update.json')
-    if (res.ok) {
-      const data: { dates: string[] } = await res.json()
-      allAvailableDates.value = data.dates
-    }
-  } catch {}
+    allAvailableDates.value = await fetchAllAvailableDates()
+  } catch (err) {
+    console.warn('Failed to fetch available dates', err)
+  }
   await loadData()
 })
 

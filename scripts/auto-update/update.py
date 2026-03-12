@@ -181,7 +181,7 @@ def download_day(date_str: str, stats: Stats, update_file: str = UPDATE_FILE) ->
             _tracker.mark_done(update_file, date_str)
         else:
             stats.inc("failed")
-            stats.add_log("yellow", f"[!] {date_str}  官方无数据 (HTTP {response.status_code})")
+            stats.add_log("yellow", f"[!] {date_str}  官方返回故障 (HTTP {response.status_code})")
             data = {
                 "date": date_str,
                 "explanation": None,
@@ -189,9 +189,13 @@ def download_day(date_str: str, stats: Stats, update_file: str = UPDATE_FILE) ->
                 "media_type": None,
                 "title": None,
                 "url": None,
-                "error_log": f"HTTP {response.status_code}",
+                "no_data": True,
+                "http_status": response.status_code,
             }
-            _tracker.mark_done(update_file, date_str)  # 官方确认无数据，视为已处理
+            # 只有 404 (通常意味着今天的数据还没出) 或者其他非 400/429 的错误才标记为已完成
+            # 400 (Bad Request) 和 429 (Rate Limit) 应该保留在重试队列中
+            if response.status_code not in (400, 429):
+                _tracker.mark_done(update_file, date_str)
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
@@ -204,12 +208,10 @@ def download_day(date_str: str, stats: Stats, update_file: str = UPDATE_FILE) ->
 
 
 # ── 入口 ──────────────────────────────────────────────────────
-def get_et_today() -> str:
-    """获取 NASA APOD 所在的美国东部时间日期 (ET)"""
+def get_utc8_today() -> str:
+    """获取东八区 (Asia/Shanghai) 的当前日期"""
     from datetime import timezone, timedelta
-    # NASA APOD typically updates at midnight ET. 
-    # Use UTC-5 (EST) as a safe baseline.
-    return (datetime.now(timezone.utc) - timedelta(hours=5)).strftime("%Y-%m-%d")
+    return (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%Y-%m-%d")
 
 def update(
     no_tui: bool = False,
@@ -240,7 +242,7 @@ def update(
     if start_date == "1995-06-16" and auto_start > APOD_START:
         start_date = auto_start
 
-    today = get_et_today()
+    today = get_utc8_today()
     if end_date is None:
         # 优先级：config.yaml > 今天的 ET 日期
         cfg_end = _cfg.get("end_date")

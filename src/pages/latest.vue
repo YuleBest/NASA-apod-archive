@@ -1,22 +1,20 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { fetchAllAvailableDates } from '@/composables/useApod'
 
 const router = useRouter()
 
 onMounted(async () => {
   try {
-    const res = await fetch('/database/update.json')
-    if (res.ok) {
-      const data = await res.json()
-      if (data.dates && data.dates.length > 0) {
-        const latest = data.dates[data.dates.length - 1]
-        router.replace(`/${latest}`)
-        return
-      }
+    const dates = await fetchAllAvailableDates()
+    if (dates.length > 0) {
+      const latest = dates[dates.length - 1]
+      router.replace(`/${latest}`)
+      return
     }
   } catch (err) {
-    console.error('Failed to fetch latest date:', err)
+    console.error('Failed to resolve latest date:', err)
   }
   // Fallback to home if something goes wrong
   router.replace('/')

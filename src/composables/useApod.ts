@@ -11,8 +11,11 @@ export interface ApodEntry {
 
 const cache = new Map<string, ApodEntry[]>()
 
-export function isValidEntry(e: ApodEntry): boolean {
-  return !e.no_data && e.http_status !== 429 && !!e.url && !!e.title
+export function isValidEntry(entry: ApodEntry | null | undefined): entry is ApodEntry {
+  if (!entry) return false
+  if (entry.no_data) return false
+  if (entry.http_status === 400 || entry.http_status === 429) return false
+  return !!(entry.date && entry.title && entry.url)
 }
 
 let updateInfoCache: {

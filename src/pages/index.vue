@@ -126,7 +126,7 @@ onMounted(async () => {
 
 const todayStr = (() => {
   const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York',
+    timeZone: 'Asia/Shanghai',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -137,7 +137,8 @@ const todayStr = (() => {
 const latestDateBtn = computed(() => {
   if (!allAvailableDates.value.length) return { label: 'Latest', date: '' }
   const latest = allAvailableDates.value[allAvailableDates.value.length - 1]!
-  const isToday = latest === todayStr
+  // If latest date is today or even newer (ET vs local mismatch), call it TODAY
+  const isToday = latest >= todayStr
   return {
     label: isToday ? 'TODAY' : 'YESTERDAY',
     date: latest,

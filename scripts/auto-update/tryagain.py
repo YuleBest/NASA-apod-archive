@@ -162,7 +162,8 @@ def retry_day(date_str: str, stats: Stats, update_file: str = UPDATE_FILE) -> No
                 "no_data": True,
                 "http_status": response.status_code,
             }
-            _tracker.mark_done(update_file, date_str)  # 官方确认无数据，视为已处理
+            if response.status_code not in (400, 429):
+                _tracker.mark_done(update_file, date_str)
 
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
