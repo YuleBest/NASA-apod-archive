@@ -16,9 +16,12 @@ onMounted(async () => {
         const entries = await fetchMonth(ym)
         const entry = entries.find((e) => e.date === latest)
 
-        if (entry && (entry.hdurl || entry.url)) {
-          window.location.replace(entry.hdurl || entry.url)
-          return
+        if (entry) {
+          const url = entry.hdurl || entry.url
+          if (url) {
+            window.location.replace(url)
+            return
+          }
         }
       }
     }

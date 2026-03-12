@@ -5,7 +5,7 @@ import { fetchMonth } from '@/composables/useApod'
 
 const route = useRoute()
 const router = useRouter()
-const date = route.params.date as string
+const date = (route.params as any).date as string
 
 onMounted(async () => {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -18,12 +18,15 @@ onMounted(async () => {
     const entries = await fetchMonth(ym)
     const entry = entries.find((e) => e.date === date)
 
-    if (entry && (entry.hdurl || entry.url)) {
-      // Redirect to high-res if available, otherwise standard
-      window.location.replace(entry.hdurl || entry.url)
-    } else {
-      router.replace(`/${date}`) // Fallback to detail page if image not found
+    if (entry) {
+      const url = entry.hdurl || entry.url
+      if (typeof url === 'string' && url) {
+        // Ensure url is a non-empty string
+        window.location.replace(url)
+        return
+      }
     }
+    router.replace(`/${date}`) // Fallback to detail page if image not found
   } catch (err) {
     console.error('Failed to redirect to image:', err)
     router.replace(`/${date}`)
