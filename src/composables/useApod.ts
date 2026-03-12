@@ -1,3 +1,5 @@
+import { ref } from 'vue'
+
 export interface ApodEntry {
   date: string
   title: string | null
@@ -10,6 +12,8 @@ export interface ApodEntry {
 }
 
 const cache = new Map<string, ApodEntry[]>()
+
+export const transitionDate = ref('')
 
 export function isValidEntry(entry: ApodEntry | null | undefined): entry is ApodEntry {
   if (!entry) return false

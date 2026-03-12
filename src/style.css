@@ -20,7 +20,6 @@
 }
 
 html {
-  scroll-behavior: smooth;
 }
 
 body {
@@ -42,4 +41,13 @@ button {
 }
 * {
   scrollbar-width: none;
+}
+
+/* ─── Transitions ─────────────────────────────────────────── */
+::view-transition-old(apod-image),
+::view-transition-new(apod-image) {
+  animation-duration: 0.5s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  mix-blend-mode: plus-lighter;
+  object-fit: contain;
 }

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useHead } from '@unhead/vue'
 import {
   fetchAvailableMonths,
   fetchMonth,
   fetchAllAvailableDates,
   isVideo,
+  transitionDate,
   type ApodEntry,
 } from '@/composables/useApod'
 
@@ -27,6 +28,7 @@ useHead({
 })
 
 const router = useRouter()
+const route = useRoute()
 
 const allMonths = ref<string[]>([])
 const allAvailableDates = ref<string[]>([])
@@ -35,6 +37,7 @@ const years = computed(() => validYears.value)
 
 const selectedYear = ref('')
 const selectedMonthPart = ref('')
+const activeTransitionDate = transitionDate
 
 const validMonthsInYear = ref<string[]>([])
 const selectingYear = ref(false)
@@ -82,46 +85,46 @@ const error = ref('')
 onMounted(async () => {
   try {
     allAvailableDates.value = await fetchAllAvailableDates()
-  } catch (err) {
-    console.warn('Failed to fetch available dates', err)
-  }
-
-  try {
     allMonths.value = await fetchAvailableMonths()
+
     if (allMonths.value.length) {
       const rawYears = [...new Set(allMonths.value.map((m) => m.slice(0, 4)))]
-
-      const yearResults = await Promise.all(
-        rawYears.map(async (y) => {
-          const monthsInYear = allMonths.value.filter((m) => m.startsWith(y))
-          const results = await Promise.all(
-            monthsInYear.map(async (m) => {
-              try {
-                const entries = await fetchMonth(m)
-                return entries.length > 0
-              } catch {
-                return false
-              }
-            }),
-          )
-          return results.some((r) => r)
-        }),
-      )
-
-      validYears.value = rawYears.filter((_, i) => yearResults[i])
+      validYears.value = rawYears.filter((y) => allMonths.value.some((m) => m.startsWith(y)))
 
       if (validYears.value.length) {
-        selectedYear.value = validYears.value[0] ?? ''
-        await checkValidMonths(selectedYear.value)
-        selectedMonthPart.value = availableMonthsForYear.value[0] ?? ''
+        const qY = route.query.y as string
+        const qM = route.query.m as string
+
+        if (qY && validYears.value.includes(qY)) {
+          selectedYear.value = qY
+          await checkValidMonths(qY)
+          if (qM && availableMonthsForYear.value.includes(qM.padStart(2, '0'))) {
+            selectedMonthPart.value = qM.padStart(2, '0')
+          } else {
+            selectedMonthPart.value = availableMonthsForYear.value[0] ?? ''
+          }
+        } else {
+          selectedYear.value = validYears.value[0] ?? ''
+          await checkValidMonths(selectedYear.value)
+          selectedMonthPart.value = availableMonthsForYear.value[0] ?? ''
+        }
+
         await loadMonth()
       }
-
-      /* Background pre-load removed - now handled in search page */
     }
   } catch (e: unknown) {
     console.error('Error during initial data fetch:', e)
   }
+})
+
+// Update query params when month/year changes
+watch([selectedYear, selectedMonthPart], () => {
+  const query = { ...route.query }
+  query.y = selectedYear.value
+  query.m = selectedMonthPart.value
+  // Remove d from query if it exists
+  delete query.d
+  router.replace({ query })
 })
 
 const todayStr = (() => {
@@ -168,6 +171,12 @@ function onYearChange() {
   if (!availableMonthsForYear.value.includes(selectedMonthPart.value)) {
     selectedMonthPart.value = availableMonthsForYear.value[0] ?? ''
   }
+  window.scrollTo(0, 0)
+  loadMonth()
+}
+
+function onMonthChange() {
+  window.scrollTo(0, 0)
   loadMonth()
 }
 
@@ -187,7 +196,17 @@ async function loadMonth() {
 }
 
 function goToDate(date: string) {
-  router.push(`/${date}`)
+  transitionDate.value = date
+  const navigate = () => router.push(`/${date}`)
+
+  if (!(document as any).startViewTransition) {
+    navigate()
+    return
+  }
+
+  ;(document as any).startViewTransition(() => {
+    navigate()
+  })
 }
 
 function formatDate(d: string) {
@@ -225,7 +244,7 @@ function getFirstSentence(text?: string | null) {
           <select v-model="selectedYear" class="month-select" @change="onYearChange()">
             <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
           </select>
-          <select v-model="selectedMonthPart" class="month-select" @change="loadMonth()">
+          <select v-model="selectedMonthPart" class="month-select" @change="onMonthChange()">
             <option v-for="m in availableMonthsForYear" :key="m" :value="m">{{ m }}</option>
           </select>
 
@@ -269,6 +288,9 @@ function getFirstSentence(text?: string | null) {
               :src="entry.url"
               :alt="entry.title ?? ''"
               loading="lazy"
+              :style="{
+                viewTransitionName: entry.date === activeTransitionDate ? 'apod-image' : 'none',
+              }"
             />
             <video
               v-else-if="isVideo(entry.url) && entry.url"
@@ -278,6 +300,9 @@ function getFirstSentence(text?: string | null) {
               muted
               playsinline
               class="video-preview"
+              :style="{
+                viewTransitionName: entry.date === activeTransitionDate ? 'apod-image' : 'none',
+              }"
             ></video>
           </div>
           <div class="card-body">
@@ -493,6 +518,30 @@ function getFirstSentence(text?: string | null) {
     /* Mobile: 1 column */
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .controls {
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .controls-left,
+  .controls-right {
+    gap: 6px;
+  }
+  .month-select {
+    font-size: 13px;
+    padding: 6px 32px 6px 12px;
+    border-radius: 10px;
+    background-position: right 10px center;
+  }
+  .today-btn {
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+  .go-btn {
+    padding: 6px 14px;
   }
 }
 

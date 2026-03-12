@@ -2,7 +2,13 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'
-import { fetchEntry, isVideo, fetchAllAvailableDates, type ApodEntry } from '@/composables/useApod'
+import {
+  fetchEntry,
+  fetchAllAvailableDates,
+  isVideo,
+  transitionDate,
+  type ApodEntry,
+} from '@/composables/useApod'
 
 const route = useRoute('/[date]')
 const router = useRouter()
@@ -14,6 +20,7 @@ const error = ref('')
 const imgLoaded = ref(false)
 const hdLoaded = ref(false)
 const downloading = ref(false)
+const viewTransitionFinished = ref(false)
 
 useHead({
   title: computed(() => (entry.value ? `${entry.value.title} | NASA APOD` : 'NASA APOD Details')),
@@ -68,6 +75,14 @@ async function loadData() {
 }
 
 onMounted(async () => {
+  window.scrollTo(0, 0)
+  transitionDate.value = date.value
+
+  // Set delay to ensure view transition (0.5s) is finished before HD cross-fade
+  setTimeout(() => {
+    viewTransitionFinished.value = true
+  }, 600)
+
   try {
     allAvailableDates.value = await fetchAllAvailableDates()
   } catch (err) {
@@ -77,6 +92,7 @@ onMounted(async () => {
 })
 
 watch(date, () => {
+  window.scrollTo(0, 0)
   loadData()
 })
 
@@ -102,6 +118,7 @@ async function navigate(dir: -1 | 1) {
   loading.value = true // Show loading while seeking
   const nextTarget = await findNextValid(idx, dir)
   if (nextTarget) {
+    transitionDate.value = nextTarget
     router.push(`/${nextTarget}`)
   } else {
     loading.value = false
@@ -152,13 +169,24 @@ async function downloadImage() {
     downloading.value = false
   }
 }
+
+function goBack() {
+  if (!(document as any).startViewTransition) {
+    router.back()
+    return
+  }
+
+  ;(document as any).startViewTransition(() => {
+    router.back()
+  })
+}
 </script>
 
 <template>
   <div class="detail">
     <!-- Nav bar -->
     <nav class="topbar">
-      <button class="back-btn" @click="router.push('/')">← Back</button>
+      <button class="back-btn" @click="goBack()">← Back</button>
       <span class="topbar-date">{{ date }}</span>
       <div class="nav-arrows">
         <button class="arrow-btn" @click="navigate(-1)" title="Newer">‹</button>
@@ -188,6 +216,7 @@ async function downloadImage() {
             loop
             muted
             class="media-video"
+            :style="{ viewTransitionName: 'apod-image' }"
           />
           <template v-else>
             <!-- Progressive Loading: Standard Image as persistent backdrop -->
@@ -196,7 +225,11 @@ async function downloadImage() {
               :src="displayUrl"
               :alt="entry.title ?? ''"
               class="media-img standard"
+              :class="{ 'standard-fade': hdLoaded && viewTransitionFinished }"
               @load="imgLoaded = true"
+              :style="{
+                viewTransitionName: !hdLoaded || !viewTransitionFinished ? 'apod-image' : 'none',
+              }"
             />
             <!-- HD Image loaded in background and overlays standard once ready -->
             <img
@@ -204,8 +237,11 @@ async function downloadImage() {
               :src="hdUrl"
               :alt="entry.title ?? ''"
               class="media-img hd"
-              :class="{ visible: hdLoaded }"
+              :class="{ visible: hdLoaded && viewTransitionFinished }"
               @load="hdLoaded = true"
+              :style="{
+                viewTransitionName: hdLoaded && viewTransitionFinished ? 'apod-image' : 'none',
+              }"
             />
           </template>
         </div>
@@ -377,16 +413,20 @@ async function downloadImage() {
 }
 .split-layout {
   flex-direction: row;
-  height: 100vh;
-  padding-top: 57px; /* topbar height */
-  overflow: hidden;
+  min-height: calc(100vh - 57px);
+  padding-top: 57px;
+  align-items: flex-start;
+  height: auto;
 }
 .split-layout .media-wrap {
-  flex: 0 0 auto;
-  min-width: 30%;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 65vw;
-  height: calc(100vh - 57px);
-  margin-top: 0;
+  width: auto;
+  height: auto;
+  min-height: 400px;
+  position: sticky;
+  top: 57px;
   border-right: 1px solid var(--border);
   background: #000;
   display: flex;
@@ -395,8 +435,6 @@ async function downloadImage() {
 }
 .split-layout .info {
   flex: 1;
-  height: calc(100vh - 57px);
-  overflow-y: auto;
   padding: 40px 48px 80px;
   max-width: 800px;
   margin: 0;
@@ -413,8 +451,12 @@ async function downloadImage() {
     max-width: 100%;
     width: 100%;
     height: auto;
+    min-height: 0;
     max-height: 70vh;
     border-right: none;
+    position: relative;
+    top: 0;
+    display: grid;
   }
   .split-layout .info {
     max-width: 800px;
@@ -457,25 +499,28 @@ async function downloadImage() {
 
 .media-img {
   grid-area: 1/1;
-  height: 100%;
   width: auto;
+  height: auto;
   max-width: 100%;
+  max-height: calc(100vh - 57px);
   display: block;
   object-fit: contain;
-  opacity: 0;
-  transition: opacity 0.5s ease;
+  background: #000;
 }
 
 .media-img.standard {
   z-index: 1;
+  transition: opacity 0.8s ease;
+}
+
+.media-img.standard.standard-fade {
+  opacity: 0;
 }
 
 .media-img.hd {
   z-index: 2;
-}
-
-.media-wrap.loaded .media-img.standard {
-  opacity: 1;
+  opacity: 0;
+  transition: opacity 0.8s ease;
 }
 
 .media-wrap.loaded .media-img.hd.visible {
