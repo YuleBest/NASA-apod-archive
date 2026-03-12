@@ -71,7 +71,7 @@ export async function fetchAllAvailableDates(): Promise<string[]> {
     return dates.sort()
   }
 
-  return data.dates || []
+  return []
 }
 
 /** 从 update.json 获取所有已下载月份列表（YYYY-MM） */
