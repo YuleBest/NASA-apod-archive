@@ -34,7 +34,7 @@ jobs:
 
       - name: Rebuild Search Index
         working-directory: .
-        run: python scripts/rebuild_index.py
+        run: python rebuild_index.py
 
       - name: Remove API Key
         if: always()
