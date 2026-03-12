@@ -220,7 +220,7 @@ const searchResults = ref<SearchDoc[]>([])
 const isSearching = ref(false)
 const searchLoading = ref(false)
 const indexReady = ref(false)
-let searchIndex: any = null  
+let searchIndex: any = null
 
 interface SearchResultField {
   field: string
@@ -252,7 +252,7 @@ async function loadSearchIndex() {
           .split(/\s+/),
       suggest: true,
       cache: true,
-    })
+    } as any)
 
     // Non-blocking chunked adding
     const CHUNK_SIZE = 100
