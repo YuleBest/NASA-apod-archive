@@ -220,7 +220,7 @@ const searchResults = ref<SearchDoc[]>([])
 const isSearching = ref(false)
 const searchLoading = ref(false)
 const indexReady = ref(false)
-let searchIndex: any = null // eslint-disable-line @typescript-eslint/no-explicit-any
+let searchIndex: any = null  
 
 interface SearchResultField {
   field: string
