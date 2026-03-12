@@ -252,7 +252,7 @@ function goBack() {
             <span class="info-date">{{ formatDate(entry.date) }}</span>
             <span v-if="entry.copyright" class="info-copy">© {{ entry.copyright }}</span>
           </div>
-          <h1 class="info-title">{{ entry.title }}</h1>
+          <h1 class="info-title font-domine">{{ entry.title }}</h1>
           <!-- Actions -->
 
           <div class="actions">
@@ -648,5 +648,9 @@ function goBack() {
   line-height: 1.9;
   color: var(--text-muted);
   margin: 0;
+}
+
+.font-domine {
+  font-family: 'Domine', 'PingFang SC', sans-serif;
 }
 </style>

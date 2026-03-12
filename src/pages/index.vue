@@ -233,7 +233,11 @@ function getFirstSentence(text?: string | null) {
     <header class="hero">
       <div class="hero-content">
         <div class="hero-badge">🔭 NASA</div>
-        <h1><span class="accent">Astronomy Picture</span><br /><span>of the Day</span></h1>
+        <h1 class="font-domine">
+          <span class="accent">Astronomy Picture</span>
+          <br />
+          <span>of the Day</span>
+        </h1>
         <p class="hero-sub">A curated archive of the universe's most breathtaking images</p>
       </div>
     </header>
@@ -368,6 +372,9 @@ function getFirstSentence(text?: string | null) {
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 24px 80px;
+}
+.font-domine {
+  font-family: 'Domine', 'PingFang SC', sans-serif;
 }
 .controls {
   display: flex;
