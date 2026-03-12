@@ -2,7 +2,6 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'
-import { Document } from 'flexsearch'
 import { fetchAvailableMonths, fetchMonth, isVideo, type ApodEntry } from '@/composables/useApod'
 
 useHead({
@@ -116,10 +115,7 @@ onMounted(async () => {
         await loadMonth()
       }
 
-      // Background pre-load search index after 2 seconds
-      setTimeout(() => {
-        loadSearchIndex()
-      }, 2000)
+      /* Background pre-load removed - now handled in search page */
     }
   } catch (e: unknown) {
     console.error('Error during initial data fetch:', e)
@@ -199,122 +195,14 @@ function formatDate(d: string) {
   })
 }
 
+// ── Search Logic ───────────────────────────────────────────
+// Search logic moved to /search page
+
 function getFirstSentence(text?: string | null) {
   if (!text) return ''
   // Split by first period followed by a space or end of string.
   const match = text.match(/^.*?\.(?=\s|$)/)
   return match ? match[0] : text.slice(0, 120) + '...'
-}
-
-// ── Search Logic ───────────────────────────────────────────
-interface SearchDoc {
-  d: string // date
-  t: string // title
-  e: string // explanation
-}
-
-const searchQuery = ref('')
-const searchResults = ref<SearchDoc[]>([])
-const isSearching = ref(false)
-const searchLoading = ref(false)
-const indexReady = ref(false)
-let searchIndex: any = null
-
-interface SearchResultField {
-  field: string
-  result: Array<{ id: string; doc: SearchDoc }>
-}
-
-async function loadSearchIndex() {
-  if (indexReady.value || searchLoading.value) return
-  searchLoading.value = true
-  try {
-    const res = await fetch('/database/search.json')
-    if (!res.ok) throw new Error('Failed to load search index')
-    const data: SearchDoc[] = await res.json()
-
-    searchIndex = new Document({
-      document: {
-        id: 'd',
-        index: [
-          { field: 't', tokenize: 'forward', resolution: 9 },
-          { field: 'e', tokenize: 'forward', resolution: 9 },
-        ],
-        store: ['d', 't', 'e'],
-      },
-      // Custom encoder to avoid library issues
-      encode: (str: string) =>
-        str
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, ' ')
-          .split(/\s+/),
-      suggest: true,
-      cache: true,
-    } as any)
-
-    // Non-blocking chunked adding
-    const CHUNK_SIZE = 100
-    let offset = 0
-
-    const processNextChunk = () => {
-      const end = Math.min(offset + CHUNK_SIZE, data.length)
-      for (let i = offset; i < end; i++) {
-        searchIndex.add(data[i])
-      }
-      offset = end
-
-      if (offset < data.length) {
-        // Schedule next chunk to keep main thread responsive
-        if ('requestIdleCallback' in window) {
-          ;(window as any).requestIdleCallback(processNextChunk)
-        } else {
-          setTimeout(processNextChunk, 1)
-        }
-      } else {
-        indexReady.value = true
-        searchLoading.value = false
-        console.log('Search index loaded successfully')
-      }
-    }
-
-    processNextChunk()
-  } catch (err) {
-    console.error('Search init error:', err)
-    searchLoading.value = false
-  }
-}
-
-watch(searchQuery, (q) => {
-  if (!q.trim()) {
-    searchResults.value = []
-    isSearching.value = false
-    return
-  }
-  isSearching.value = q.length > 1
-  if (q.length > 2 && indexReady.value && searchIndex) {
-    const res = searchIndex.search(q, { limit: 20, enrich: true }) as SearchResultField[]
-    if (res.length > 0) {
-      const allResults: SearchDoc[] = []
-      res.forEach((fieldResult) => {
-        if (fieldResult.result) {
-          fieldResult.result.forEach((item) => {
-            allResults.push(item.doc)
-          })
-        }
-      })
-      // Unique results by date
-      const unique = Array.from(new Map(allResults.map((it) => [it.d, it])).values())
-      searchResults.value = unique
-    } else {
-      searchResults.value = []
-    }
-  }
-})
-
-function clearSearch() {
-  searchQuery.value = ''
-  searchResults.value = []
-  isSearching.value = false
 }
 </script>
 
@@ -323,7 +211,7 @@ function clearSearch() {
     <header class="hero">
       <div class="hero-content">
         <div class="hero-badge">🔭 NASA</div>
-        <h1>Astronomy Picture<br /><span class="accent">of the Day</span></h1>
+        <h1><span class="accent">Astronomy Picture</span><br /><span>of the Day</span></h1>
         <p class="hero-sub">A curated archive of the universe's most breathtaking images</p>
       </div>
     </header>
@@ -338,20 +226,7 @@ function clearSearch() {
             <option v-for="m in availableMonthsForYear" :key="m" :value="m">{{ m }}</option>
           </select>
 
-          <div class="search-wrapper">
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search APOD..."
-              class="search-input"
-              @focus="loadSearchIndex"
-            />
-            <button v-if="searchQuery" class="search-clear" @click="clearSearch()">×</button>
-            <div v-if="searchLoading" class="search-indicator">
-              <div class="search-spinner-sm"></div>
-              <span>Preparing...</span>
-            </div>
-          </div>
+          <!-- Search wrapper removed (moved to Navbar) -->
         </div>
 
         <div class="controls-right">
@@ -368,26 +243,7 @@ function clearSearch() {
         </div>
       </div>
 
-      <!-- Search Results Overlay -->
-      <div v-if="isSearching" class="search-results">
-        <div v-if="searchResults.length === 0" class="search-empty">
-          No results for "{{ searchQuery }}"
-        </div>
-        <div v-else class="search-list">
-          <div
-            v-for="res in searchResults"
-            :key="res.d"
-            class="search-item"
-            @click="goToDate(res.d)"
-          >
-            <span class="search-item-date">{{ res.d }}</span>
-            <div class="search-item-body">
-              <div class="search-item-title">{{ res.t }}</div>
-              <div class="search-item-snippet">{{ getFirstSentence(res.e) }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Search results moved to /search page -->
 
       <div v-if="loading || selectingYear" class="state-msg">
         <div class="spinner"></div>
@@ -444,7 +300,7 @@ function clearSearch() {
 /* ─── Hero ───────────────────────────────────────────────── */
 .hero {
   position: relative;
-  padding: 80px 24px 60px;
+  padding: 100px 24px 60px;
   text-align: center;
   background: radial-gradient(ellipse at 50% 0%, rgba(99, 179, 255, 0.15) 0%, transparent 70%);
   overflow: hidden;
@@ -540,110 +396,6 @@ function clearSearch() {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* ── Search ─────────────────────────────────────────────── */
-.search-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.search-input {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 8px 16px;
-  padding-right: 32px;
-  border-radius: 12px;
-  font-size: 14px;
-  width: 200px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.search-input:focus {
-  width: 300px;
-  border-color: #63b3ff;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 0 4px rgba(99, 179, 255, 0.15);
-}
-.search-clear {
-  position: absolute;
-  right: 10px;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 18px;
-  cursor: pointer;
-}
-.search-indicator {
-  position: absolute;
-  right: -90px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
-  pointer-events: none;
-}
-.search-spinner-sm {
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #63b3ff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-.search-results {
-  margin-top: 10px;
-  background: rgba(13, 20, 31, 0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  max-height: 400px;
-  overflow-y: auto;
-  position: absolute;
-  left: 20px;
-  right: 20px;
-  z-index: 1000;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-}
-.search-empty {
-  padding: 40px;
-  text-align: center;
-  color: var(--text-muted);
-}
-.search-item {
-  display: flex;
-  gap: 20px;
-  padding: 16px 24px;
-  cursor: pointer;
-  transition: all 0.2s;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-.search-item:last-child {
-  border-bottom: none;
-}
-.search-item:hover {
-  background: rgba(99, 179, 255, 0.1);
-}
-.search-item-date {
-  font-size: 13px;
-  color: var(--text-muted);
-  font-family: monospace;
-  white-space: nowrap;
-}
-.search-item-title {
-  font-weight: 600;
-  color: #63b3ff;
-  margin-bottom: 4px;
-}
-.search-item-snippet {
-  font-size: 13px;
-  color: var(--text-muted);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
 .today-btn {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -735,8 +487,8 @@ function clearSearch() {
 
 @media (max-width: 768px) {
   .grid {
-    /* Mobile: 2 columns */
-    grid-template-columns: repeat(2, 1fr);
+    /* Mobile: 1 column */
+    grid-template-columns: 1fr;
     gap: 16px;
   }
 }

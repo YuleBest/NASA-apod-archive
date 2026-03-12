@@ -12,6 +12,7 @@ const entry = ref<ApodEntry | null>(null)
 const loading = ref(true)
 const error = ref('')
 const imgLoaded = ref(false)
+const hdLoaded = ref(false)
 const downloading = ref(false)
 
 useHead({
@@ -39,6 +40,7 @@ const allAvailableDates = ref<string[]>([])
 async function loadData() {
   loading.value = true
   imgLoaded.value = false
+  hdLoaded.value = false
   error.value = ''
   try {
     const data = await fetchEntry(date.value)
@@ -115,7 +117,9 @@ function formatDate(d: string) {
   })
 }
 
-const displayUrl = computed(() => entry.value?.hdurl || entry.value?.url || null)
+const displayUrl = computed(() => entry.value?.url || null)
+const hdUrl = computed(() => entry.value?.hdurl || null)
+const hasSeparateHd = computed(() => !!hdUrl.value && hdUrl.value !== displayUrl.value)
 const isVid = computed(() => isVideo(entry.value?.url ?? null))
 
 async function downloadImage() {
@@ -174,7 +178,7 @@ async function downloadImage() {
     <template v-else>
       <div class="layout-container split-layout">
         <!-- Media -->
-        <div class="media-wrap" :class="{ loaded: imgLoaded || isVid }">
+        <div class="media-wrap" :class="{ loaded: imgLoaded || hdLoaded || isVid }">
           <video
             v-if="isVid"
             :src="entry.url ?? undefined"
@@ -185,12 +189,22 @@ async function downloadImage() {
             class="media-video"
           />
           <template v-else>
+            <!-- Progressive Loading: Standard Image as persistent backdrop -->
             <img
               v-if="displayUrl"
               :src="displayUrl"
               :alt="entry.title ?? ''"
-              class="media-img"
+              class="media-img standard"
               @load="imgLoaded = true"
+            />
+            <!-- HD Image loaded in background and overlays standard once ready -->
+            <img
+              v-if="hasSeparateHd && hdUrl"
+              :src="hdUrl"
+              :alt="entry.title ?? ''"
+              class="media-img hd"
+              :class="{ visible: hdLoaded }"
+              @load="hdLoaded = true"
             />
           </template>
         </div>
@@ -229,7 +243,7 @@ async function downloadImage() {
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
               <div v-else class="btn-spinner"></div>
-              {{ downloading ? 'Downloading...' : 'HD Image' }}
+              <span>{{ downloading ? 'Downloading...' : 'HD Image' }}</span>
             </button>
             <a
               :href="`https://apod.nasa.gov/apod/ap${entry.date.replace(/-/g, '').slice(2)}.html`"
@@ -237,7 +251,23 @@ async function downloadImage() {
               rel="noopener"
               class="btn btn-ghost"
             >
-              🔗 APOD Page
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="btn-icon"
+              >
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+              <span>APOD Page</span>
             </a>
           </div>
 
@@ -416,8 +446,16 @@ async function downloadImage() {
 .media-wrap.loaded {
   background: #060c17;
 }
-.media-img {
+
+/* Use grid to stack images in the same space without breaking flex/size logic */
+.media-wrap {
+  display: grid !important;
+  place-items: center;
   position: relative;
+}
+
+.media-img {
+  grid-area: 1/1;
   height: 100%;
   width: auto;
   max-width: 100%;
@@ -426,14 +464,30 @@ async function downloadImage() {
   opacity: 0;
   transition: opacity 0.5s ease;
 }
-.media-wrap.loaded .media-img {
+
+.media-img.standard {
+  z-index: 1;
+}
+
+.media-img.hd {
+  z-index: 2;
+}
+
+.media-wrap.loaded .media-img.standard {
   opacity: 1;
 }
+
+.media-wrap.loaded .media-img.hd.visible {
+  opacity: 1;
+}
+
 .media-video {
+  grid-area: 1/1;
   width: 100%;
   height: 100%;
   object-fit: contain;
   background: #000;
+  z-index: 3;
 }
 
 /* ─── Info ───────────────────────────────────────────────── */
@@ -486,14 +540,18 @@ async function downloadImage() {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
+  padding: 0 16px;
+  height: 38px;
+  min-width: 130px;
   border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   text-decoration: none;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+  box-sizing: border-box;
 }
 .btn-primary {
   background: #63b3ff;
@@ -503,7 +561,10 @@ async function downloadImage() {
 .btn-primary:hover:not(:disabled) {
   background: #7ec7ff;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(99, 179, 255, 0.3);
+  box-shadow: 0 4px 15px rgba(99, 179, 255, 0.4);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
 }
 .btn-primary:disabled {
   opacity: 0.7;
@@ -511,23 +572,29 @@ async function downloadImage() {
 }
 .btn-icon {
   flex-shrink: 0;
+  opacity: 0.9;
 }
 .btn-spinner {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border: 2px solid rgba(0, 0, 0, 0.1);
   border-top-color: currentColor;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 .btn-ghost {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
   color: var(--text);
 }
 .btn-ghost:hover {
   border-color: #63b3ff;
+  background: rgba(99, 179, 255, 0.1);
   color: #63b3ff;
+  transform: translateY(-2px);
+}
+.btn-ghost:active {
+  transform: translateY(0);
 }
 
 .explanation p {

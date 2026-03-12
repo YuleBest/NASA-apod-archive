@@ -32,6 +32,10 @@ jobs:
       - name: Run pipeline
         run: uv run python main.py --no-tui
 
+      - name: Rebuild Search Index
+        working-directory: .
+        run: python scripts/rebuild_index.py
+
       - name: Remove API Key
         if: always()
         run: rm -f api-key.txt
