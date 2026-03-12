@@ -1,5 +1,7 @@
 # 🌌 NASA APOD Archive
 
+![最新图片](https://nasa.21acg.cn/image/latest)
+
 [English Version](./README_EN.md) | 简体中文
 
 基于 NASA **天文每日一图 (APOD)** 的现代化、高性能归档浏览器。使用 Vue 3 和 Vite 构建，并针对流畅浏览和本地数据缓存进行了优化。

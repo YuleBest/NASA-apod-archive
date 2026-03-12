@@ -15,9 +15,12 @@ export const onRequest: PagesFunction = async (context) => {
     newHeaders.set('Access-Control-Allow-Origin', '*')
     newHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
 
-    // Ensure it's treated as an attachment if requested
-    const filename = targetUrl.split('/').pop() || 'download'
-    newHeaders.set('Content-Disposition', `attachment; filename="${filename}"`)
+    // Add attachment header only if download parameter is present
+    const isDownload = searchParams.get('download') === '1'
+    if (isDownload) {
+      const filename = targetUrl.split('/').pop() || 'download'
+      newHeaders.set('Content-Disposition', `attachment; filename="${filename}"`)
+    }
 
     return new Response(response.body, {
       status,
