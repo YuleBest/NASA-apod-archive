@@ -112,22 +112,35 @@ def organize(
     # 写出每月文件
     written = 0
 
-    import calendar
-
     for month_key in sorted(monthly.keys()):
-        entries = sorted(monthly[month_key], key=lambda d: d.get("date", ""))
-        
+        new_entries = monthly[month_key]
+
+        # 先从 dist 目录加载同月份的现有数据，与增量数据合并，
+        # 防止 .tmp 目录仅含少量新条目时将历史数据覆盖删除。
+        existing_by_date: dict[str, dict] = {}
+        if os.path.exists(dist_dir):
+            for old_f in os.listdir(dist_dir):
+                if old_f.startswith(month_key) and old_f.endswith(".json"):
+                    old_path = os.path.join(dist_dir, old_f)
+                    try:
+                        with open(old_path, "r", encoding="utf-8") as f:
+                            for item in json.load(f):
+                                d = item.get("date")
+                                if d:
+                                    existing_by_date[d] = item
+                    except Exception:
+                        pass
+
+        # 新条目覆盖同日已有记录
+        for item in new_entries:
+            d = item.get("date")
+            if d:
+                existing_by_date[d] = item
+
+        entries = sorted(existing_by_date.values(), key=lambda d: d.get("date", ""))
+
         # 确定文件名
-        year, month = map(int, month_key.split("-"))
-        days_in_month = calendar.monthrange(year, month)[1]
-        
-        if len(entries) < days_in_month:
-            # 不满一个月
-            start_day = entries[0]["date"].split("-")[2]
-            end_day = entries[-1]["date"].split("-")[2]
-            filename = f"{month_key}_{start_day}-{end_day}.json"
-        else:
-            filename = f"{month_key}.json"
+        filename = f"{month_key}.json"
             
         out_path = os.path.join(dist_dir, filename)
         
