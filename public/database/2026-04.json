@@ -119,5 +119,14 @@
     "hdurl": "https://apod.nasa.gov/apod/image/2604/Southern_Celestial_Pole.jpg",
     "title": "South Celestial Tree",
     "url": "https://apod.nasa.gov/apod/image/2604/Southern_Celestial_Pole_800.jpg"
+  },
+  {
+    "date": "2026-04-17",
+    "explanation": null,
+    "hdurl": null,
+    "title": null,
+    "url": null,
+    "no_data": true,
+    "http_status": 503
   }
 ]
