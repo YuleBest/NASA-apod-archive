@@ -136,5 +136,14 @@
     "hdurl": "https://apod.nasa.gov/apod/image/2604/PanstarrsPlanetsPerrot.jpg",
     "title": "PanSTARRS and Planets",
     "url": "https://apod.nasa.gov/apod/image/2604/PanstarrsPlanetsPerrotLab1024.jpg"
+  },
+  {
+    "date": "2026-04-19",
+    "explanation": null,
+    "hdurl": null,
+    "title": null,
+    "url": null,
+    "no_data": true,
+    "http_status": 503
   }
 ]
