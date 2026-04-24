@@ -175,5 +175,14 @@
     "hdurl": "https://apod.nasa.gov/apod/image/2604/noirlab2610c.jpg",
     "title": "Large Scale Structure of the Universe",
     "url": "https://apod.nasa.gov/apod/image/2604/noirlab2610c_1024.jpg"
+  },
+  {
+    "date": "2026-04-24",
+    "explanation": null,
+    "hdurl": null,
+    "title": null,
+    "url": null,
+    "no_data": true,
+    "http_status": 503
   }
 ]
