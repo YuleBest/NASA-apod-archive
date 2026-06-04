@@ -21,5 +21,14 @@
     "hdurl": "https://apod.nasa.gov/apod/image/2606/andromeda.png",
     "title": "Andromeda Through Gas and Dust",
     "url": "https://apod.nasa.gov/apod/image/2606/andromeda_1024.png"
+  },
+  {
+    "date": "2026-06-04",
+    "explanation": null,
+    "hdurl": null,
+    "title": null,
+    "url": null,
+    "no_data": true,
+    "http_status": 503
   }
 ]
