@@ -69,5 +69,14 @@
     "hdurl": "https://apod.nasa.gov/apod/image/2606/Thor_Drudis_4389.jpg",
     "title": "Thor's Helmet",
     "url": "https://apod.nasa.gov/apod/image/2606/Thor_Drudis_960.jpg"
+  },
+  {
+    "date": "2026-06-10",
+    "explanation": null,
+    "hdurl": null,
+    "title": null,
+    "url": null,
+    "no_data": true,
+    "http_status": 503
   }
 ]
