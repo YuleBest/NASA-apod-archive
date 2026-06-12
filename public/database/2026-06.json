@@ -86,5 +86,14 @@
     "hdurl": "https://apod.nasa.gov/apod/image/2606/Mermaid.jpg",
     "title": "The Mermaid Nebula Supernova Remnant",
     "url": "https://apod.nasa.gov/apod/image/2606/Mermaid_1024.jpg"
+  },
+  {
+    "date": "2026-06-12",
+    "explanation": null,
+    "hdurl": null,
+    "title": null,
+    "url": null,
+    "no_data": true,
+    "http_status": 503
   }
 ]
