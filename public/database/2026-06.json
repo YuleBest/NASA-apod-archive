@@ -172,5 +172,14 @@
     "hdurl": "https://apod.nasa.gov/apod/image/2606/M27_antonucci_3090.jpg",
     "title": "M27: The Dumbbell Nebula",
     "url": "https://apod.nasa.gov/apod/image/2606/M27_antonucci_960.jpg"
+  },
+  {
+    "date": "2026-06-23",
+    "explanation": null,
+    "hdurl": null,
+    "title": null,
+    "url": null,
+    "no_data": true,
+    "http_status": 503
   }
 ]
