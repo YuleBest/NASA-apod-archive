@@ -88,5 +88,14 @@
     "hdurl": "https://apod.nasa.gov/apod/image/2607/NGC474_CfhtCoelum_1500.jpg",
     "title": "Galaxy NGC 474: Shells and Star Streams",
     "url": "https://apod.nasa.gov/apod/image/2607/NGC474_CfhtCoelum_960.jpg"
+  },
+  {
+    "date": "2026-07-13",
+    "explanation": null,
+    "hdurl": null,
+    "title": null,
+    "url": null,
+    "no_data": true,
+    "http_status": 404
   }
 ]
