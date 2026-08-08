@@ -52,5 +52,14 @@
     "hdurl": "https://apod.nasa.gov/apod/image/2608/noirlab2618b.jpg",
     "title": "Rubin's COSMOS field",
     "url": "https://apod.nasa.gov/apod/image/2608/noirlab2618b_1024.jpg"
+  },
+  {
+    "date": "2026-08-08",
+    "explanation": null,
+    "hdurl": null,
+    "title": null,
+    "url": null,
+    "no_data": true,
+    "http_status": 503
   }
 ]
