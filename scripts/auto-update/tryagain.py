@@ -13,6 +13,7 @@ import argparse
 import requests
 import json
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 
@@ -59,6 +60,59 @@ UPDATE_FILE = _cfg["update_file"]
 # --------------
 
 console = Console()
+
+BAD_IMAGE_MARKERS = ("nasa-logo@2x.png", "NASA_logo-1.png")
+DESCRIPTION_START = '<p class="p-md margin-0 media-detail-hero__description">'
+
+
+def _fallback_from_site(date_str: str) -> dict | None:
+    response = requests.get(
+        "https://science.nasa.gov/apod/",
+        params={"date": date_str},
+        timeout=20,
+    )
+    response.raise_for_status()
+
+    title_match = re.search(
+        r'<meta property="og:title" content="([^"]+)"', response.text
+    )
+    image_match = re.search(
+        r'<meta property="og:image" content="([^"]+)"', response.text
+    )
+    video_match = re.search(
+        r'<meta property="og:video" content="([^"]+)"', response.text
+    )
+    if not title_match or not image_match:
+        return None
+
+    title = title_match.group(1)
+    if not title.startswith("APOD:"):
+        return None
+
+    start = response.text.find(DESCRIPTION_START)
+    if start == -1:
+        return None
+
+    body = response.text[start + len(DESCRIPTION_START):]
+    end = body.find("</p>")
+    if end == -1:
+        return None
+
+    explanation = re.sub(r"<[^>]+>", " ", body[:end])
+    explanation = re.sub(r"\s+", " ", explanation).strip()
+    explanation = explanation.removeprefix("Explanation: ").strip()
+
+    media_type = "video" if video_match else "image"
+    url = video_match.group(1) if video_match else image_match.group(1)
+
+    return {
+        "title": title.removeprefix("APOD:").strip(" -"),
+        "explanation": explanation,
+        "url": url,
+        "hdurl": url,
+        "media_type": media_type,
+        "service_version": "v1",
+    }
 
 
 # ── 扫描失败文件 ──────────────────────────────────────────────
@@ -146,6 +200,13 @@ def retry_day(date_str: str, stats: Stats, update_file: str = UPDATE_FILE) -> No
 
         if response.status_code == 200:
             data = response.json()
+            if any(marker in (data.get("url") or "") for marker in BAD_IMAGE_MARKERS):
+                fixed = _fallback_from_site(date_str)
+                if fixed:
+                    data.update(fixed)
+                    stats.add_log("yellow", f"[~] {date_str}  API logo，已从新版页面修复")
+                else:
+                    stats.add_log("yellow", f"[!] {date_str}  API logo，页面兜底失败")
             stats.inc("success")
             stats.add_log("green", f"[+] {date_str}  抓取成功")
             _tracker.mark_done(update_file, date_str)
